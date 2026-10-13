@@ -189,13 +189,21 @@ document.addEventListener("DOMContentLoaded", () => {
         ? `<span class="badge-admin inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold"><i data-lucide="crown" class="w-3 h-3"></i> Yönetici</span>`
         : `<span class="badge-user inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold"><i data-lucide="user" class="w-3 h-3"></i> ${photo.uploader_name}</span>`;
 
+      let thumbSrc = photo.thumbnail || photo.filename;
+      if (thumbSrc && thumbSrc.startsWith('http')) {
+        // Cloudinary URL'sinde kare kırpma (c_fill) varsa, tam görsel için c_limit yap (asla kırpmaz)
+        thumbSrc = thumbSrc.replace(/\/c_fill,[^/]+\//, '/c_limit,w_800,q_auto,f_auto/');
+      } else {
+        thumbSrc = '/static/thumbs/' + (photo.thumbnail || photo.filename);
+      }
+
       card.innerHTML = `
-        <div class="relative overflow-hidden bg-neutral-900">
+        <div class="relative overflow-hidden bg-neutral-900 rounded-2xl">
           <img 
-            src="${photo.thumbnail && photo.thumbnail.startsWith('http') ? photo.thumbnail : '/static/thumbs/' + photo.thumbnail}" 
+            src="${thumbSrc}" 
             alt="${photo.title || 'Fotoğraf'}" 
             loading="lazy" 
-            class="w-full object-cover rounded-2xl">
+            class="w-full h-auto object-contain block rounded-2xl">
           
           <div class="photo-overlay rounded-2xl">
             <div class="flex items-center justify-between">

@@ -60,8 +60,8 @@ def process_and_save_image(file_storage):
                 ]
             )
             main_url = res["secure_url"]
-            # Hızlı yükleme için 750px kare kırpılmış thumbnail URL'i
-            thumb_url = main_url.replace("/upload/", "/upload/c_fill,w_750,h_750,g_auto,q_auto,f_auto/")
+            # Tam görsel oranını koruyarak (kırpmadan) optimize thumbnail URL'i
+            thumb_url = main_url.replace("/upload/", "/upload/c_limit,w_800,q_auto,f_auto/")
             return main_url, thumb_url, original_filename
         except Exception as e:
             print(f"[Cloudinary Yükleme Hatası, yerel diske dönülüyor]: {e}")
