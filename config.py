@@ -13,6 +13,6 @@ SECRET_KEY = os.environ.get("FLASK_SECRET_KEY", "foto-portal-super-secret-key-3.
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "gif", "avif"}
 MAX_CONTENT_LENGTH = 32 * 1024 * 1024  # 32 MB max per upload
 
-# Telegram Bildirim Ayarları
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8801848863:AAHETD9fp2B2IBioxQXGSPg4nCqc-pgMQvU")
+# Telegram Bildirim Ayarları (Render Ortam Değişkeni / Environment Variable üzerinden okunur)
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "668067263")
