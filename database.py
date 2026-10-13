@@ -105,12 +105,15 @@ def init_db():
     conn.close()
 
 def get_admin_key():
+    env_key = os.environ.get("ADMIN_KEY", "").strip()
+    if env_key:
+        return env_key
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute(q("SELECT value FROM settings WHERE key = ?"), ('admin_key',))
     row = cursor.fetchone()
     conn.close()
-    return row["value"] if row else DEFAULT_ADMIN_KEY
+    return row["value"] if (row and row["value"]) else "foto-admin-2026"
 
 def update_admin_key(new_key):
     conn = get_db()
