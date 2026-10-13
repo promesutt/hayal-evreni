@@ -198,10 +198,22 @@ def get_messages():
         online_count = database.get_online_count()
         
     messages = database.get_chat_messages(after_id=after_id)
+    active_ids = database.get_recent_message_ids()
     return jsonify({
         "messages": messages,
-        "online_count": online_count
+        "online_count": online_count,
+        "active_ids": active_ids
     })
+
+@app.route("/api/chat/messages/<int:message_id>", methods=["DELETE"])
+def delete_chat_msg(message_id):
+    if not check_is_admin():
+        return jsonify({"error": "Yetkisiz erişim"}), 403
+    
+    success = database.delete_chat_message(message_id)
+    if success:
+        return jsonify({"success": True, "message": "Mesaj silindi"})
+    return jsonify({"success": False, "message": "Mesaj bulunamadı"}), 404
 
 @app.route("/api/chat/send", methods=["POST"])
 def send_message():

@@ -250,6 +250,25 @@ def update_online_user(session_id, username=None):
     conn.close()
     return max(1, count)
 
+def delete_chat_message(message_id):
+    """Yönetici için sohbet mesajını siler"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM chat_messages WHERE id = ?", (message_id,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+def get_recent_message_ids(limit=80):
+    """Aktif mesaj ID'lerini döndürür (silinenleri tespit etmek için)"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM chat_messages ORDER BY id DESC LIMIT ?", (limit,))
+    ids = [row["id"] for row in cursor.fetchall()]
+    conn.close()
+    return ids
+
 def get_online_count():
     now = time.time()
     conn = get_db()

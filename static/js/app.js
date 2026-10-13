@@ -543,11 +543,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const time = msg.created_at ? msg.created_at.slice(11, 16) : "";
 
+    const deleteBtnHtml = isAdmin
+      ? `<button class="btn-delete-msg p-1 text-neutral-500 hover:text-rose-400 rounded transition-colors ml-1" title="Mesajı Sil" data-id="${msg.id}">
+           <i data-lucide="trash-2" class="w-3 h-3"></i>
+         </button>`
+      : '';
+
     row.innerHTML = `
       <div class="flex items-center gap-1.5 text-[10px] ${isSelf ? 'justify-end' : 'justify-start'}">
         ${!isSelf ? senderDisplay : ''}
         <span class="text-neutral-500">${time}</span>
         ${isSelf ? '<span class="text-brand-400 font-semibold">Sen</span>' : ''}
+        ${deleteBtnHtml}
       </div>
       <div class="chat-bubble ${
         isSelf
@@ -559,6 +566,29 @@ document.addEventListener("DOMContentLoaded", () => {
         ${escapeHtml(msg.message)}
       </div>
     `;
+
+    // Admin message delete click handler
+    if (isAdmin) {
+      const delBtn = row.querySelector(".btn-delete-msg");
+      delBtn?.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm("Bu mesajı silmek istediğinize emin misiniz?")) return;
+        try {
+          const res = await fetch(`/api/chat/messages/${msg.id}`, { method: "DELETE" });
+          const d = await res.json();
+          if (d.success) {
+            row.style.opacity = '0';
+            row.style.transform = 'scale(0.9)';
+            setTimeout(() => row.remove(), 200);
+            showToast("Mesaj silindi", "success");
+          } else {
+            showToast("Mesaj silinemedi", "error");
+          }
+        } catch (err) {
+          showToast("Hata oluştu", "error");
+        }
+      });
+    }
 
     chatMessages.appendChild(row);
 
@@ -594,6 +624,17 @@ document.addEventListener("DOMContentLoaded", () => {
       if (headerOnlineText) headerOnlineText.textContent = `${count} kişi aktif`;
       if (chatOnlineStatus) chatOnlineStatus.textContent = `${count} kişi sayfada aktif`;
       if (chatOnlineBadge) chatOnlineBadge.textContent = count;
+
+      // Sync deleted messages in real time for all visitors
+      if (data.active_ids && Array.isArray(data.active_ids) && lastMessageId > 0) {
+        const activeSet = new Set(data.active_ids);
+        chatMessages.querySelectorAll("[data-msg-id]").forEach((el) => {
+          const mid = parseInt(el.dataset.msgId);
+          if (!activeSet.has(mid)) {
+            el.remove();
+          }
+        });
+      }
 
       // Append new messages
       if (data.messages && data.messages.length > 0) {
