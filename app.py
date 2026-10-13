@@ -254,6 +254,14 @@ def delete_chat_msg(message_id):
         return jsonify({"success": True, "message": "Mesaj silindi"})
     return jsonify({"success": False, "message": "Mesaj bulunamadı"}), 404
 
+@app.route("/api/chat/messages/clear-all", methods=["DELETE"])
+def clear_all_chat():
+    if not check_is_admin():
+        return jsonify({"error": "Yetkisiz erişim"}), 403
+    
+    database.clear_all_chat_messages()
+    return jsonify({"success": True, "message": "Tüm sohbet geçmişi temizlendi"})
+
 @app.route("/api/chat/send", methods=["POST"])
 def send_message():
     data = request.get_json() or {}

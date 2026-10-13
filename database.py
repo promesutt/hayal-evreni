@@ -320,6 +320,15 @@ def delete_chat_message(message_id):
     conn.close()
     return deleted
 
+def clear_all_chat_messages():
+    """Tüm sohbet geçmişini temizler"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(q("DELETE FROM chat_messages"))
+    conn.commit()
+    conn.close()
+    return True
+
 def get_recent_message_ids(limit=80):
     conn = get_db()
     cursor = conn.cursor()

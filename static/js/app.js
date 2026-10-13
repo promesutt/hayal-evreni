@@ -643,6 +643,31 @@ document.addEventListener("DOMContentLoaded", () => {
   chatToggleBtn?.addEventListener("click", toggleChat);
   btnMinimizeChat?.addEventListener("click", toggleChat);
 
+  // Admin Tüm Sohbeti Temizleme Butonu
+  const btnClearAllChat = document.getElementById("btnClearAllChat");
+  if (isAdmin && btnClearAllChat) {
+    btnClearAllChat.classList.remove("hidden");
+    btnClearAllChat.addEventListener("click", async () => {
+      if (!confirm("⚠️ Tüm sohbet geçmişini tek seferde silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz.")) return;
+      try {
+        const res = await fetch("/api/chat/messages/clear-all", {
+          method: "DELETE",
+          headers: adminKey ? { "X-Admin-Key": adminKey } : {}
+        });
+        const d = await res.json();
+        if (d.success) {
+          if (chatMessages) chatMessages.innerHTML = "";
+          lastMessageId = 0;
+          showToast("Tüm sohbet geçmişi temizlendi", "success");
+        } else {
+          showToast(d.message || "Sohbet temizlenemedi", "error");
+        }
+      } catch (err) {
+        showToast("Hata oluştu", "error");
+      }
+    });
+  }
+
   const updateUnreadBadge = () => {
     if (!chatUnreadBadge) return;
     if (unreadCount > 0 && !isChatOpen) {
