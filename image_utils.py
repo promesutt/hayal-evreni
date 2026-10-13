@@ -4,24 +4,71 @@ from PIL import Image, ImageOps
 from werkzeug.utils import secure_filename
 from config import UPLOAD_FOLDER, THUMB_FOLDER, ALLOWED_EXTENSIONS
 
+try:
+    import cloudinary
+    import cloudinary.uploader
+    import cloudinary.utils
+    CLOUDINARY_AVAILABLE = True
+except ImportError:
+    CLOUDINARY_AVAILABLE = False
+
+def is_cloudinary_configured():
+    if not CLOUDINARY_AVAILABLE:
+        return False
+    if os.environ.get("CLOUDINARY_URL"):
+        return True
+    return bool(
+        os.environ.get("CLOUDINARY_CLOUD_NAME") and
+        os.environ.get("CLOUDINARY_API_KEY") and
+        os.environ.get("CLOUDINARY_API_SECRET")
+    )
+
+def init_cloudinary():
+    if not is_cloudinary_configured():
+        return
+    if not os.environ.get("CLOUDINARY_URL"):
+        cloudinary.config(
+            cloud_name=os.environ.get("CLOUDINARY_CLOUD_NAME"),
+            api_key=os.environ.get("CLOUDINARY_API_KEY"),
+            api_secret=os.environ.get("CLOUDINARY_API_SECRET"),
+            secure=True
+        )
+
 def is_allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def process_and_save_image(file_storage):
     """
     Kullanıcının yüklediği görseli işler:
-    - EXIF yönlendirmesini düzeltir
-    - Büyük görselleri optimize eder (max 2560px)
-    - Hızlı yükleme için küçük resim (thumbnail - max 700px) üretir
-    - Güvenli rastgele bir dosya adı oluşturur
+    - Cloudinary ayarlıysa kalıcı olarak buluta yükler
+    - Değilse yerel diske optimize WebP olarak kaydeder
     """
+    original_filename = secure_filename(file_storage.filename) or "foto.jpg"
+    
+    # 1. Cloudinary bulut yüklemesi (Kalıcı ve silinmez)
+    if is_cloudinary_configured():
+        try:
+            init_cloudinary()
+            unique_id = uuid.uuid4().hex
+            
+            res = cloudinary.uploader.upload(
+                file_storage.stream,
+                public_id=f"hayal_{unique_id}",
+                folder="hayal_evreni",
+                transformation=[
+                    {"width": 2560, "height": 2560, "crop": "limit", "quality": "auto", "fetch_format": "auto"}
+                ]
+            )
+            main_url = res["secure_url"]
+            # Hızlı yükleme için 750px kare kırpılmış thumbnail URL'i
+            thumb_url = main_url.replace("/upload/", "/upload/c_fill,w_750,h_750,g_auto,q_auto,f_auto/")
+            return main_url, thumb_url, original_filename
+        except Exception as e:
+            print(f"[Cloudinary Yükleme Hatası, yerel diske dönülüyor]: {e}")
+
+    # 2. Yerel disk yüklemesi (Fallback)
     UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
     THUMB_FOLDER.mkdir(parents=True, exist_ok=True)
-
-    original_filename = secure_filename(file_storage.filename) or "foto.jpg"
-    ext = original_filename.rsplit(".", 1)[1].lower() if "." in original_filename else "jpg"
-    if ext not in ALLOWED_EXTENSIONS:
-        ext = "jpg"
 
     unique_id = uuid.uuid4().hex
     target_filename = f"{unique_id}.webp"
@@ -30,25 +77,18 @@ def process_and_save_image(file_storage):
     target_path = UPLOAD_FOLDER / target_filename
     thumb_path = THUMB_FOLDER / thumb_filename
 
-    # Pillow ile aç
     image = Image.open(file_storage.stream)
 
-    # EXIF yönlendirmesini uygula (akıllı telefon fotoğrafları için kritik)
     try:
         image = ImageOps.exif_transpose(image)
     except Exception:
         pass
 
-    # RGB formatına dönüştür (PNG veya RGBA durumunda WebP şeffaflığı korur, CMYK ise RGB'ye çevir)
     if image.mode in ("CMYK", "P"):
         image = image.convert("RGB")
-    elif image.mode == "RGBA":
-        # PNG şeffaflık
-        pass
-    else:
+    elif image.mode != "RGBA":
         image = image.convert("RGB")
 
-    # 1. Ana Görsel Optimizasyonu (Maksimum 2560px)
     max_main_dimension = 2560
     main_img = image.copy()
     if max(main_img.size) > max_main_dimension:
@@ -56,7 +96,6 @@ def process_and_save_image(file_storage):
     
     main_img.save(target_path, format="WEBP", quality=88, method=4)
 
-    # 2. Hızlı Küçük Resim / Thumbnail (Maksimum 750px genişlik/yükseklik)
     thumb_img = image.copy()
     thumb_img.thumbnail((750, 750), Image.Resampling.LANCZOS)
     thumb_img.save(thumb_path, format="WEBP", quality=82, method=4)
@@ -64,7 +103,19 @@ def process_and_save_image(file_storage):
     return target_filename, thumb_filename, original_filename
 
 def remove_image_files(filename, thumb_filename):
-    """Silinen fotoğrafın diskteki dosyalarını temizler"""
+    """Silinen fotoğrafın dosyalarını temizler"""
+    if filename.startswith("http") and is_cloudinary_configured():
+        try:
+            init_cloudinary()
+            parts = filename.split("/")
+            if "hayal_evreni" in parts:
+                idx = parts.index("hayal_evreni")
+                public_id = "/".join(parts[idx:]).rsplit(".", 1)[0]
+                cloudinary.uploader.destroy(public_id)
+        except Exception as e:
+            print(f"Cloudinary silme hatası: {e}")
+        return
+
     try:
         main_path = UPLOAD_FOLDER / filename
         if main_path.exists():

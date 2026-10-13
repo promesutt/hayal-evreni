@@ -192,7 +192,7 @@ document.addEventListener("DOMContentLoaded", () => {
       card.innerHTML = `
         <div class="relative overflow-hidden bg-neutral-900">
           <img 
-            src="/static/thumbs/${photo.thumbnail}" 
+            src="${photo.thumbnail && photo.thumbnail.startsWith('http') ? photo.thumbnail : '/static/thumbs/' + photo.thumbnail}" 
             alt="${photo.title || 'Fotoğraf'}" 
             loading="lazy" 
             class="w-full object-cover rounded-2xl">
@@ -264,13 +264,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const downloadEl = document.getElementById("btnLightboxDownload");
     const deleteBtn = document.getElementById("btnLightboxDelete");
 
-    imgEl.src = `/static/uploads/${photo.filename}`;
+    const fullUrl = (photo.filename && photo.filename.startsWith('http')) ? photo.filename : `/static/uploads/${photo.filename}`;
+    imgEl.src = fullUrl;
     imgEl.alt = photo.title || "Fotoğraf";
     titleEl.textContent = photo.title || "İsimsiz Fotoğraf";
     descEl.textContent = photo.description || "Fotoğraf açıklaması eklenmemiş.";
     authorEl.textContent = `Yükleyen: ${photo.uploader_name} • ${photo.created_at ? photo.created_at.slice(0, 10) : ''}`;
     likeCountEl.textContent = photo.likes_count || 0;
-    downloadEl.href = `/static/uploads/${photo.filename}`;
+    downloadEl.href = fullUrl;
     downloadEl.setAttribute("download", photo.original_filename || photo.filename);
 
     if (photo.uploader_role === "admin") {
