@@ -483,7 +483,135 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ==================== CANLI SOHBET (CHAT) MANTIĞI ====================
+  // ==================== CANLI SOHBET & BİLDİRİMLER (SESLİ & GÖRSEL) ====================
+
+  let isSoundEnabled = localStorage.getItem("photo_portal_sound") !== "false";
+  let audioCtx = null;
+
+  // Sesli Bildirim Üretici (Web Audio API - harici dosya gerektirmez, net ve zarif iki tonlu zil sesi)
+  const playNotificationSound = () => {
+    if (!isSoundEnabled) return;
+    try {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      const now = audioCtx.currentTime;
+
+      // 1. Ton (784Hz - G5)
+      const osc1 = audioCtx.createOscillator();
+      const gain1 = audioCtx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(784, now);
+      gain1.gain.setValueAtTime(0.18, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc1.connect(gain1);
+      gain1.connect(audioCtx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.22);
+
+      // 2. Ton (1046Hz - C6)
+      const osc2 = audioCtx.createOscillator();
+      const gain2 = audioCtx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1046, now + 0.08);
+      gain2.gain.setValueAtTime(0.22, now + 0.08);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      osc2.start(now + 0.08);
+      osc2.stop(now + 0.38);
+    } catch (e) {
+      console.log("Ses çalma uyarısı:", e);
+    }
+  };
+
+  // Sekme Başlığı Yanıp Sönmesi (Görsel Bildirim)
+  let titleFlashInterval = null;
+  const originalDocTitle = "Hayal Evreni";
+  const startTitleFlash = (senderName) => {
+    if (titleFlashInterval) return;
+    let isAlt = false;
+    titleFlashInterval = setInterval(() => {
+      document.title = isAlt ? `(💬 Yeni Mesaj!) Hayal Evreni` : `🔔 [${senderName}] - Hayal Evreni`;
+      isAlt = !isAlt;
+    }, 1000);
+  };
+  const stopTitleFlash = () => {
+    if (titleFlashInterval) {
+      clearInterval(titleFlashInterval);
+      titleFlashInterval = null;
+      document.title = originalDocTitle;
+    }
+  };
+  window.addEventListener('focus', stopTitleFlash);
+
+  // Tarayıcı / Masaüstü Bildirimi
+  const requestNotificationPermission = () => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  };
+
+  const showDesktopNotification = (senderName, messageText) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      if (document.hidden || !isChatOpen) {
+        try {
+          new Notification(`💬 ${senderName} (Hayal Evreni)`, {
+            body: messageText,
+            icon: '/static/thumbs/thumb_demo_1.webp'
+          });
+        } catch (e) {}
+      }
+    }
+  };
+
+  // Ses Açma / Kapatma Butonu
+  const btnToggleSound = document.getElementById("btnToggleSound");
+  const soundIcon = document.getElementById("soundIcon");
+  const updateSoundUI = () => {
+    if (!btnToggleSound || !soundIcon) return;
+    if (isSoundEnabled) {
+      btnToggleSound.classList.add("text-amber-400");
+      btnToggleSound.classList.remove("text-neutral-500");
+      btnToggleSound.title = "Sesli Bildirim Açık (Kapatmak için tıklayın)";
+      soundIcon.setAttribute("data-lucide", "bell");
+    } else {
+      btnToggleSound.classList.remove("text-amber-400");
+      btnToggleSound.classList.add("text-neutral-500");
+      btnToggleSound.title = "Sesli Bildirim Kapalı (Açmak için tıklayın)";
+      soundIcon.setAttribute("data-lucide", "bell-off");
+    }
+    refreshIcons();
+  };
+
+  btnToggleSound?.addEventListener("click", () => {
+    isSoundEnabled = !isSoundEnabled;
+    localStorage.setItem("photo_portal_sound", isSoundEnabled);
+    updateSoundUI();
+    requestNotificationPermission();
+    if (isSoundEnabled) {
+      playNotificationSound();
+      showToast("🔔 Sesli bildirimler açıldı", "success");
+    } else {
+      showToast("🔕 Sesli bildirimler kapatıldı", "info");
+    }
+  });
+
+  // İlk tıklamada ses motorunu ve bildirim iznini hazırla
+  document.addEventListener('click', () => {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    requestNotificationPermission();
+  }, { once: true });
+
+  updateSoundUI();
 
   const toggleChat = () => {
     isChatOpen = !isChatOpen;
@@ -493,6 +621,7 @@ document.addEventListener("DOMContentLoaded", () => {
       chatToggleBtn.classList.add("hidden");
       unreadCount = 0;
       updateUnreadBadge();
+      stopTitleFlash();
       chatInput?.focus();
       scrollChatToBottom();
     } else {
@@ -592,9 +721,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     chatMessages.appendChild(row);
 
-    if (!isHistorical && !isChatOpen) {
-      unreadCount++;
-      updateUnreadBadge();
+    if (!isHistorical) {
+      if (!isSelf) {
+        // Sesli bildirim çal
+        playNotificationSound();
+
+        // Görsel bildirimler (sekme başlığı yanıp sönmesi ve masaüstü bildirimi)
+        if (document.hidden || !isChatOpen) {
+          startTitleFlash(msg.sender_name);
+          showDesktopNotification(msg.sender_name, msg.message);
+        }
+      }
+
+      if (!isChatOpen) {
+        unreadCount++;
+        updateUnreadBadge();
+      }
     }
 
     scrollChatToBottom();

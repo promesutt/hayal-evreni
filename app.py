@@ -1,7 +1,10 @@
 import os
 import uuid
+import threading
+import urllib.request
+import urllib.parse
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-from config import SECRET_KEY, DEFAULT_ADMIN_KEY, MAX_CONTENT_LENGTH
+from config import SECRET_KEY, DEFAULT_ADMIN_KEY, MAX_CONTENT_LENGTH, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
 import database
 from image_utils import is_allowed_file, process_and_save_image, remove_image_files
 
@@ -16,6 +19,32 @@ try:
     seed_demo_data.create_demo_photos()
 except Exception as e:
     pass
+
+def send_telegram_alert(text):
+    """Telegram botu üzerinden yöneticiye arka planda asenkron bildirim gönderir."""
+    def _worker():
+        try:
+            if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+                return
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+            payload = urllib.parse.urlencode({
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": text,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": "true"
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                url,
+                data=payload,
+                headers={"User-Agent": "HayalEvreniPortal/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=5) as response:
+                pass
+        except Exception as e:
+            print(f"[Telegram Bildirim Hatası]: {e}")
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
 
 def check_is_admin():
     """Oturum veya istekteki admin anahtarını kontrol eder"""
@@ -152,6 +181,16 @@ def upload_photo():
     )
     
     photo = database.get_photo_by_id(photo_id)
+    
+    # Telegram bildirimi gönder
+    desc_text = f"\n📝 <i>{description}</i>" if description else ""
+    send_telegram_alert(
+        f"📸 <b>Yeni Fotoğraf Paylaşıldı!</b>\n\n"
+        f"👤 <b>Paylaşan:</b> {uploader_name}\n"
+        f"🏷 <b>Başlık:</b> {title}{desc_text}\n\n"
+        f"🔗 <a href='https://hayal-evreni.onrender.com'>Hayal Evreni'ni Aç</a>"
+    )
+
     return jsonify({
         "success": True,
         "status": "approved",
@@ -230,6 +269,14 @@ def send_message():
         sender_name = "👑 Yönetici"
 
     msg = database.add_chat_message(sender_name, is_admin, text)
+    
+    # Telegram bildirimi gönder (ziyaretçi mesaj yazdığında yöneticiye anında ilet)
+    if not is_admin:
+        send_telegram_alert(
+            f"💬 <b>Yeni Sohbet Mesajı!</b>\n\n"
+            f"👤 <b>{sender_name}:</b> {text}\n\n"
+            f"🔗 <a href='https://hayal-evreni.onrender.com'>Sohbete Git ve Cevap Ver</a>"
+        )
     
     online_count = 1
     if session_id:
